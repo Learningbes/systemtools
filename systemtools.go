@@ -1,8 +1,13 @@
 package systemtools
 
 import (
+	"database/sql"
 	"encoding/json"
+	"log"
 	"net/http"
+	"time"
+
+	_ "github.com/lib/pq"
 )
 
 type JsonResponsePayload struct {
@@ -74,4 +79,44 @@ func ErrorJSON(w http.ResponseWriter, err error, status ...int) error {
 	}
 
 	return WriteJSON(w, statusCode, payload)
+}
+
+func ConnectToDB(dsn string) *sql.DB {
+
+	var counts int
+
+	for {
+		connection, err := openDB(dsn)
+		if err != nil {
+			log.Println("Postgres not yet ready...")
+			counts++
+		} else {
+			log.Println("Connected to Postgres")
+			return connection
+		}
+
+		if counts > 10 {
+			log.Println(err)
+			return nil
+		}
+
+		log.Println("Backing off for 2 seconds")
+		time.Sleep(2 * time.Second)
+		continue
+	}
+}
+
+// Utils
+func openDB(dsn string) (*sql.DB, error) {
+	db, err := sql.Open("postgres", dsn)
+	if err != nil {
+		return nil, err
+	}
+
+	err = db.Ping()
+	if err != nil {
+		return nil, err
+	}
+
+	return db, nil
 }
